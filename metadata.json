@@ -1,0 +1,6 @@
+{
+  "name": "Work Hours & Earnings Tracker",
+  "description": "Track work start and end times, pauses, notes, earnings, fixed cost deductions, and Minijob month advance calculus.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
