@@ -74,7 +74,7 @@ export async function loadSettings(): Promise<UserSettings> {
     }
     // If it's a "relation does not exist" error (code '42P01')
     if (error.code === '42P01') {
-      throw new Error('The "user_settings" table does not exist in your Supabase database. Please run the SQL setup script to create it.');
+      throw new Error('The "user_settings" table does not exist in your Supabase database.');
     }
     console.error('Error loading settings from Supabase:', error);
     throw new Error(`Error loading settings from Supabase: ${formatSupabaseError(error)}`);
@@ -157,7 +157,7 @@ export async function saveSettings(settings: UserSettings): Promise<void> {
     if (!error) return;
     lastError = error;
     if (error.code === '42P01') {
-      throw new Error('The "user_settings" table does not exist in your Supabase database. Please run the SQL setup script to create it.');
+      throw new Error('The "user_settings" table does not exist in your Supabase database.');
     }
   }
 
@@ -181,7 +181,7 @@ export async function loadEntries(): Promise<WorkEntry[]> {
 
   if (error) {
     if (error.code === '42P01') {
-      throw new Error('The "work_entries" table does not exist in your Supabase database. Please run the SQL setup script to create it.');
+      throw new Error('The "work_entries" table does not exist in your Supabase database.');
     }
     console.error('Error loading entries from Supabase:', error);
     throw new Error(`Error loading entries from Supabase: ${formatSupabaseError(error)}`);
@@ -201,6 +201,7 @@ export async function loadEntries(): Promise<WorkEntry[]> {
     grossHours: item.gross_hours !== undefined ? Number(item.gross_hours) : Number(item.grossHours || item.grosshours || 0),
     netHours: item.net_hours !== undefined ? Number(item.net_hours) : Number(item.netHours || item.nethours || 0),
     notes: item.notes,
+    isPlanned: item.is_planned !== undefined ? Boolean(item.is_planned) : (item.isPlanned !== undefined ? Boolean(item.isPlanned) : (item.isplanned !== undefined ? Boolean(item.isplanned) : (item.notes && item.notes.startsWith('[PLANNED]')))),
     createdAt: item.created_at !== undefined ? item.created_at : (item.createdAt !== undefined ? item.createdAt : item.createdat),
     updatedAt: item.updated_at !== undefined ? item.updated_at : (item.updatedAt !== undefined ? item.updatedAt : item.updatedat),
   })) as WorkEntry[];
@@ -214,8 +215,24 @@ export async function saveEntry(entry: WorkEntry): Promise<void> {
     throw new Error('Supabase is not configured. Please add SUPABASE_URL and SUPABASE_ANON_KEY to your environment variables.');
   }
 
+  const isPlannedVal = entry.isPlanned || false;
+
   const candidates = [
-    // Candidate 1: Standard snake_case
+    // Candidate 1: Standard snake_case with is_planned
+    {
+      id: entry.id,
+      date: entry.date,
+      start_time: entry.startTime,
+      end_time: entry.endTime,
+      pause_minutes: entry.pauseMinutes,
+      gross_hours: entry.grossHours,
+      net_hours: entry.netHours,
+      notes: entry.notes,
+      is_planned: isPlannedVal,
+      created_at: entry.createdAt,
+      updated_at: entry.updatedAt,
+    },
+    // Candidate 2: Standard snake_case without is_planned
     {
       id: entry.id,
       date: entry.date,
@@ -228,7 +245,7 @@ export async function saveEntry(entry: WorkEntry): Promise<void> {
       created_at: entry.createdAt,
       updated_at: entry.updatedAt,
     },
-    // Candidate 2: Mixed (snake_case work fields + camelCase timestamps)
+    // Candidate 3: Mixed (snake_case work fields + camelCase timestamps)
     {
       id: entry.id,
       date: entry.date,
@@ -238,6 +255,7 @@ export async function saveEntry(entry: WorkEntry): Promise<void> {
       gross_hours: entry.grossHours,
       net_hours: entry.netHours,
       notes: entry.notes,
+      isPlanned: isPlannedVal,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
     },
@@ -300,7 +318,7 @@ export async function saveEntry(entry: WorkEntry): Promise<void> {
     if (!error) return;
     lastError = error;
     if (error.code === '42P01') {
-      throw new Error('The "work_entries" table does not exist in your Supabase database. Please run the SQL setup script to create it.');
+      throw new Error('The "work_entries" table does not exist in your Supabase database.');
     }
   }
 
@@ -323,10 +341,59 @@ export async function deleteEntry(id: string): Promise<void> {
 
   if (error) {
     if (error.code === '42P01') {
-      throw new Error('The "work_entries" table does not exist in your Supabase database. Please run the SQL setup script to create it.');
+      throw new Error('The "work_entries" table does not exist in your Supabase database.');
     }
     console.error('Error deleting entry from Supabase:', error);
     throw new Error(`Error deleting entry from Supabase: ${formatSupabaseError(error)}`);
+  }
+}
+
+/**
+ * Subscribes to real-time changes on work_entries and user_settings in Supabase.
+ */
+export function subscribeToChanges(
+  onEntriesChange: () => void,
+  onSettingsChange: () => void
+): () => void {
+  if (!supabase) return () => {};
+
+  // Use a unique channel ID per subscription instance to avoid "cannot add postgres_changes callbacks after subscribe()" error
+  const channelId = `app-realtime-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+  try {
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'work_entries' },
+        () => {
+          onEntriesChange();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_settings' },
+        () => {
+          onSettingsChange();
+        }
+      );
+
+    channel.subscribe((status, err) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.warn('Supabase Realtime Channel Error:', err);
+      }
+    });
+
+    return () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch {
+        // Ignore cleanup error
+      }
+    };
+  } catch (err) {
+    console.warn('Failed to initialize Supabase realtime subscription:', err);
+    return () => {};
   }
 }
 

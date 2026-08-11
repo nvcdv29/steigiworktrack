@@ -224,6 +224,48 @@ export function calculateMonthlySummaries(
 }
 
 /**
+ * Calculates active working days between start date and end date (inclusive),
+ * deducting specified days off per week (0 to 3 days off per week).
+ */
+export function calculateActiveWorkdays(
+  startDateStr: string,
+  endDateStr: string,
+  daysOffPerWeek: number
+): number {
+  if (!startDateStr || !endDateStr) return 1;
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+    return 1;
+  }
+
+  let activeDays = 0;
+  const current = new Date(start);
+
+  while (current <= end) {
+    const dayOfWeek = current.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+    let isDayOff = false;
+
+    if (daysOffPerWeek === 1) {
+      if (dayOfWeek === 0) isDayOff = true; // Sunday
+    } else if (daysOffPerWeek === 2) {
+      if (dayOfWeek === 0 || dayOfWeek === 6) isDayOff = true; // Sat, Sun
+    } else if (daysOffPerWeek >= 3) {
+      if (dayOfWeek === 0 || dayOfWeek === 6 || dayOfWeek === 5) isDayOff = true; // Fri, Sat, Sun
+    }
+
+    if (!isDayOff) {
+      activeDays++;
+    }
+
+    current.setDate(current.getDate() + 1);
+  }
+
+  return Math.max(1, activeDays);
+}
+
+/**
  * Default initial settings
  */
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -254,6 +296,7 @@ export const SAMPLE_WORK_ENTRIES: WorkEntry[] = [
     grossHours: 8.5,
     netHours: 7.75,
     notes: 'Website UI redesign implementation & component architecture',
+    isPlanned: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -266,6 +309,7 @@ export const SAMPLE_WORK_ENTRIES: WorkEntry[] = [
     grossHours: 9.0,
     netHours: 8.0,
     notes: 'Backend API integration and database testing',
+    isPlanned: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -278,6 +322,7 @@ export const SAMPLE_WORK_ENTRIES: WorkEntry[] = [
     grossHours: 8.5,
     netHours: 8.0,
     notes: 'Client consultation, project review, and sprint planning',
+    isPlanned: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -290,6 +335,7 @@ export const SAMPLE_WORK_ENTRIES: WorkEntry[] = [
     grossHours: 9.0,
     netHours: 8.0,
     notes: 'Performance optimization and automated testing setup',
+    isPlanned: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -302,6 +348,20 @@ export const SAMPLE_WORK_ENTRIES: WorkEntry[] = [
     grossHours: 6.5,
     netHours: 6.0,
     notes: 'Bug fixes, documentation update, and feature deployment',
+    isPlanned: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'sample-future-1',
+    date: '2026-09-05',
+    startTime: '08:00',
+    endTime: '20:00',
+    pauseMinutes: 0,
+    grossHours: 24.0,
+    netHours: 24.0,
+    notes: 'Food Truck Festival (Weekend Shift)',
+    isPlanned: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },

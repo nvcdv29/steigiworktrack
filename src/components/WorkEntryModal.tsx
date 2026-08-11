@@ -23,6 +23,18 @@ export const WorkEntryModal: React.FC<WorkEntryModalProps> = ({
   const [endTime, setEndTime] = useState<string>(initialEntry?.endTime || '17:00');
   const [pauseMinutes, setPauseMinutes] = useState<number>(initialEntry?.pauseMinutes ?? 30);
   const [notes, setNotes] = useState<string>(initialEntry?.notes || '');
+  const [isPlanned, setIsPlanned] = useState<boolean>(
+    initialEntry?.isPlanned ?? (initialEntry ? false : new Date(date) > new Date())
+  );
+
+  // Auto set planned if date is changed to a future date
+  const handleDateChange = (newDate: string) => {
+    setDate(newDate);
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (newDate > todayStr && !initialEntry) {
+      setIsPlanned(true);
+    }
+  };
 
   // Live calculated state
   const { grossHours, netHours } = calculateHours(startTime, endTime, pauseMinutes);
@@ -35,6 +47,7 @@ export const WorkEntryModal: React.FC<WorkEntryModalProps> = ({
     grossHours,
     netHours,
     notes,
+    isPlanned,
     createdAt: initialEntry?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -52,6 +65,7 @@ export const WorkEntryModal: React.FC<WorkEntryModalProps> = ({
       grossHours,
       netHours,
       notes: notes.trim(),
+      isPlanned,
       createdAt: initialEntry?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -100,9 +114,28 @@ export const WorkEntryModal: React.FC<WorkEntryModalProps> = ({
               type="date"
               required
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => handleDateChange(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none"
             />
+          </div>
+
+          {/* Entry Type Toggle (Actual vs Planned Shift) */}
+          <div className="bg-indigo-50/60 border border-indigo-100 rounded-lg p-2.5 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isPlannedCheckbox"
+                checked={isPlanned}
+                onChange={(e) => setIsPlanned(e.target.checked)}
+                className="h-4 w-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+              />
+              <label htmlFor="isPlannedCheckbox" className="text-xs font-bold text-indigo-900 cursor-pointer">
+                Future / Scheduled Shift (Pre-built Credit)
+              </label>
+            </div>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${isPlanned ? 'bg-purple-100 text-purple-800 border-purple-200' : 'bg-slate-200 text-slate-700 border-slate-300'}`}>
+              {isPlanned ? 'Planned Shift' : 'Actual Worked'}
+            </span>
           </div>
 
           {/* Start and End Times */}

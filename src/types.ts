@@ -7,8 +7,39 @@ export interface WorkEntry {
   grossHours: number; // (endTime - startTime) in hours
   netHours: number; // grossHours - (pauseMinutes / 60)
   notes: string;
+  isPlanned?: boolean; // True if this is an upcoming / scheduled future shift (pre-built credit)
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
+}
+
+// Target Scenario Definition for Runway & Target Builder
+export interface TargetScenario {
+  id: string;
+  label: string; // e.g. "Dec 2026 (4 mos)"
+  targetEndDate: string; // "2026-12-31"
+  monthlyCap: number; // 603
+  payoutMonths?: number;
+}
+
+// Future Scheduled / Unclocked Shift
+export interface ScheduledShift {
+  id: string;
+  title: string; // e.g. "Food Truck Festival"
+  date: string;
+  estimatedHours: number; // 24
+  hourlyRate: number; // 15.00
+  enabled?: boolean; // For what-if toggle in planner
+  entryId?: string; // Link to actual WorkEntry if created via work log
+}
+
+// Runway & Target Planner State
+export interface PlannerState {
+  activeScenarioId: string;
+  customTargetEndDate: string;
+  customMonthlyCap: number;
+  workWindowStart: string; // "2026-08-11"
+  workWindowEnd: string;   // "2026-08-28"
+  daysOffPerWeek: number;  // 0 to 3
 }
 
 export type FixedCostType = 'monthly' | 'weekly' | 'per_entry' | 'one_time';

@@ -5,14 +5,17 @@ import {
   Edit2,
   Trash2,
   Download,
-  Calendar,
+  Calendar as CalendarIcon,
   Clock,
   FileText,
   Plus,
   ArrowUpDown,
+  List,
+  Grid,
 } from 'lucide-react';
 import { WorkEntry, UserSettings } from '../types';
 import { calculateEntryEarnings, formatGermanDate } from '../lib/calculus';
+import { WorkEntriesCalendar } from './WorkEntriesCalendar';
 
 interface WorkEntriesTableProps {
   entries: WorkEntry[];
@@ -20,6 +23,7 @@ interface WorkEntriesTableProps {
   onEdit: (entry: WorkEntry) => void;
   onDelete: (id: string) => void;
   onAddNew: () => void;
+  onAddNewForDate?: (dateStr: string) => void;
 }
 
 export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
@@ -28,12 +32,19 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
   onEdit,
   onDelete,
   onAddNew,
+  onAddNewForDate,
 }) => {
+  const [displayMode, setDisplayMode] = useState<'list' | 'calendar'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState('ALL');
+  const [typeTab, setTypeTab] = useState<'ALL' | 'ACTUAL' | 'PLANNED'>('ALL');
   const [sortField, setSortField] = useState<'date' | 'netHours' | 'grossEarnings'>('date');
   const [sortAsc, setSortAsc] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Counts for tabs
+  const actualCount = entries.filter((e) => !e.isPlanned).length;
+  const plannedCount = entries.filter((e) => e.isPlanned).length;
 
   // Extract unique months for filter dropdown
   const uniqueMonths = Array.from(
@@ -48,7 +59,11 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
       searchQuery === '' ||
       entry.notes.toLowerCase().includes(searchQuery.toLowerCase()) ||
       entry.date.includes(searchQuery);
-    return matchesMonth && matchesSearch;
+    const matchesType =
+      typeTab === 'ALL' ||
+      (typeTab === 'PLANNED' && entry.isPlanned) ||
+      (typeTab === 'ACTUAL' && !entry.isPlanned);
+    return matchesMonth && matchesSearch && matchesType;
   });
 
   // Sort entries
@@ -140,12 +155,71 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
     <div className="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-5 text-slate-900 shadow-xs space-y-3">
       {/* Header Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-        <div className="flex items-center space-x-2">
-          <Clock className="h-4 w-4 text-indigo-600" />
-          <h3 className="text-sm font-bold text-slate-900">Work Entry Logs</h3>
-          <span className="text-[11px] px-2 py-0.5 bg-slate-100 text-slate-700 rounded font-bold border border-slate-200">
-            {sortedEntries.length} entries
-          </span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <div className="flex items-center space-x-2">
+            <Clock className="h-4 w-4 text-indigo-600" />
+            <h3 className="text-sm font-bold text-slate-900">Work Entry Logs</h3>
+          </div>
+
+          {/* Display Mode Switcher (List vs Calendar Heatmap) */}
+          <div className="flex items-center space-x-1 bg-slate-200/70 p-0.5 rounded-lg text-xs font-bold border border-slate-300/50">
+            <button
+              onClick={() => setDisplayMode('list')}
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-md transition cursor-pointer ${
+                displayMode === 'list'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+              <span>List</span>
+            </button>
+            <button
+              onClick={() => setDisplayMode('calendar')}
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-md transition cursor-pointer ${
+                displayMode === 'calendar'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Grid className="h-3.5 w-3.5" />
+              <span>Calendar Heatmap</span>
+            </button>
+          </div>
+
+          {/* Type Filter Tabs */}
+          <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
+            <button
+              onClick={() => setTypeTab('ALL')}
+              className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                typeTab === 'ALL'
+                  ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All ({entries.length})
+            </button>
+            <button
+              onClick={() => setTypeTab('ACTUAL')}
+              className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                typeTab === 'ACTUAL'
+                  ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Actuals ({actualCount})
+            </button>
+            <button
+              onClick={() => setTypeTab('PLANNED')}
+              className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                typeTab === 'PLANNED'
+                  ? 'bg-purple-600 text-white shadow-2xs font-bold'
+                  : 'text-purple-700 hover:text-purple-900'
+              }`}
+            >
+              Planned ({plannedCount})
+            </button>
+          </div>
         </div>
 
         {/* Filter / Search / Export Bar */}
@@ -207,21 +281,31 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
         </div>
       </div>
 
-      {/* Table Content */}
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[11px]">
-              <th className="py-2.5 px-3">
-                <button
-                  onClick={() => toggleSort('date')}
-                  className="flex items-center space-x-1 hover:text-indigo-600 transition cursor-pointer"
-                >
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span>Date</span>
-                  <ArrowUpDown className="h-3 w-3" />
-                </button>
-              </th>
+      {/* View Display Mode Rendering */}
+      {displayMode === 'calendar' ? (
+        <WorkEntriesCalendar
+          entries={filteredEntries}
+          settings={settings}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onAddNewForDate={onAddNewForDate}
+        />
+      ) : (
+        /* Table Content List View */
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[11px]">
+                <th className="py-2.5 px-3">
+                  <button
+                    onClick={() => toggleSort('date')}
+                    className="flex items-center space-x-1 hover:text-indigo-600 transition cursor-pointer"
+                  >
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    <span>Date</span>
+                    <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </th>
               <th className="py-2.5 px-3">Start - End</th>
               <th className="py-2.5 px-3">Pause</th>
               <th className="py-2.5 px-3">
@@ -259,13 +343,25 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
             ) : (
               sortedEntries.map((entry) => {
                 const { grossEarnings } = calculateEntryEarnings(entry, settings);
+                const isPlanned = entry.isPlanned;
                 return (
                   <tr
                     key={entry.id}
-                    className="hover:bg-slate-50/80 transition group text-slate-700"
+                    className={`transition group text-slate-700 ${
+                      isPlanned
+                        ? 'bg-purple-50/40 hover:bg-purple-50/80 border-l-3 border-l-purple-500'
+                        : 'hover:bg-slate-50/80'
+                    }`}
                   >
                     <td className="py-2.5 px-3 font-semibold whitespace-nowrap text-slate-900">
-                      {formatGermanDate(entry.date)}
+                      <div className="flex items-center space-x-1.5">
+                        <span>{formatGermanDate(entry.date)}</span>
+                        {isPlanned && (
+                          <span className="px-1.5 py-0.2 bg-purple-100 text-purple-800 border border-purple-200 text-[10px] font-extrabold rounded tracking-wide uppercase">
+                            Planned
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2.5 px-3 whitespace-nowrap text-slate-600">
                       {entry.startTime} - {entry.endTime}
@@ -273,14 +369,20 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
                     <td className="py-2.5 px-3 whitespace-nowrap text-amber-700 font-medium">
                       {entry.pauseMinutes > 0 ? `${entry.pauseMinutes}m` : '-'}
                     </td>
-                    <td className="py-2.5 px-3 whitespace-nowrap font-bold text-indigo-700">
+                    <td className={`py-2.5 px-3 whitespace-nowrap font-bold ${isPlanned ? 'text-purple-700' : 'text-indigo-700'}`}>
                       {entry.netHours.toFixed(2)} h
                     </td>
                     <td className="py-2.5 px-3 whitespace-nowrap font-bold text-emerald-700">
                       {grossEarnings.toFixed(2)} {settings.currency}
                     </td>
                     <td className="py-2.5 px-3 max-w-xs truncate text-slate-600">
-                      {entry.notes || <span className="text-slate-300 italic">No notes</span>}
+                      {entry.notes ? (
+                        <span className={isPlanned ? 'font-medium text-purple-900' : ''}>
+                          {entry.notes}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 italic">No notes</span>
+                      )}
                     </td>
                     <td className="py-2.5 px-3 text-right whitespace-nowrap space-x-1">
                       <button
@@ -328,6 +430,7 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 };
