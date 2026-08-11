@@ -188,14 +188,7 @@ export async function loadEntries(): Promise<WorkEntry[]> {
   }
 
   if (!data || data.length === 0) {
-    // Seed with sample entries
-    console.log('No entries found, seeding sample entries...');
-    try {
-      await importEntries(SAMPLE_WORK_ENTRIES);
-    } catch (importErr: any) {
-      console.warn('Failed to seed sample entries, using local sample entries:', importErr);
-    }
-    return SAMPLE_WORK_ENTRIES;
+    return [];
   }
 
   // Map to WorkEntry frontend model supporting snake_case, camelCase, and lowercase
