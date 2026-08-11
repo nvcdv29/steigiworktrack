@@ -2,16 +2,49 @@ import { createClient } from '@supabase/supabase-js';
 import { UserSettings, WorkEntry } from '../types';
 import { DEFAULT_USER_SETTINGS, SAMPLE_WORK_ENTRIES } from './calculus';
 
-const supabaseUrl = (process.env.SUPABASE_URL as string) || '';
-const supabaseAnonKey = (process.env.SUPABASE_ANON_KEY as string) || '';
+function getEnvVar(keys: string[]): string {
+  // 1. Try import.meta.env (Vite standard)
+  try {
+    const metaEnv = (import.meta as any)?.env;
+    if (metaEnv) {
+      for (const key of keys) {
+        if (metaEnv[key]) return metaEnv[key];
+      }
+    }
+  } catch {
+    // Ignore
+  }
 
-export function isSupabaseConfigured(): boolean {
-  return !!supabaseUrl && !!supabaseAnonKey;
+  // 2. Try process.env safely
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      for (const key of keys) {
+        if (process.env[key]) return process.env[key];
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  return '';
 }
 
-export const supabase = isSupabaseConfigured()
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+const supabaseUrl = getEnvVar(['VITE_SUPABASE_URL', 'SUPABASE_URL', 'REACT_APP_SUPABASE_URL']);
+const supabaseAnonKey = getEnvVar(['VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY', 'VITE_SUPABASE_KEY', 'SUPABASE_KEY', 'REACT_APP_SUPABASE_ANON_KEY']);
+
+export function isSupabaseConfigured(): boolean {
+  return !!supabaseUrl && !!supabaseAnonKey && supabaseUrl.startsWith('http');
+}
+
+export const supabase = (function () {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    return createClient(supabaseUrl, supabaseAnonKey);
+  } catch (err) {
+    console.error('Error creating Supabase client:', err);
+    return null;
+  }
+})();
 
 function formatSupabaseError(error: any): string {
   if (!error) return 'Unknown error';
