@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Edit2, Trash2, Clock, Sparkles } from 'lucide-react';
 import { WorkEntry, UserSettings } from '../types';
-import { calculateEntryEarnings, formatGermanDate } from '../lib/calculus';
+import { calculateEntryEarnings, formatGermanDate, isPlannedEntry } from '../lib/calculus';
 
 interface WorkEntriesCalendarProps {
   entries: WorkEntry[];
@@ -88,8 +88,8 @@ export const WorkEntriesCalendar: React.FC<WorkEntriesCalendarProps> = ({
 
   // Calculate monthly stats
   const monthEntries = entries.filter((e) => e.date.startsWith(currentYearMonth));
-  const monthActuals = monthEntries.filter((e) => !e.isPlanned);
-  const monthPlanned = monthEntries.filter((e) => e.isPlanned);
+  const monthActuals = monthEntries.filter((e) => !isPlannedEntry(e));
+  const monthPlanned = monthEntries.filter((e) => isPlannedEntry(e));
 
   const totalActualHours = monthActuals.reduce((sum, e) => sum + e.netHours, 0);
   const totalPlannedHours = monthPlanned.reduce((sum, e) => sum + e.netHours, 0);
@@ -101,10 +101,10 @@ export const WorkEntriesCalendar: React.FC<WorkEntriesCalendarProps> = ({
       return 'bg-white border-slate-200 text-slate-400 hover:border-slate-300';
     }
 
-    const hasPlanned = dayEntries.some((e) => e.isPlanned);
+    const hasPlanned = dayEntries.some((e) => isPlannedEntry(e));
     const totalHours = dayEntries.reduce((sum, e) => sum + e.netHours, 0);
 
-    if (hasPlanned && dayEntries.every((e) => e.isPlanned)) {
+    if (hasPlanned && dayEntries.every((e) => isPlannedEntry(e))) {
       return 'bg-purple-50/90 border-purple-300 text-purple-900 hover:bg-purple-100 shadow-2xs';
     }
 
@@ -198,7 +198,7 @@ export const WorkEntriesCalendar: React.FC<WorkEntriesCalendarProps> = ({
 
           const dayEntries = entriesByDate[cell.dateStr] || [];
           const totalHours = dayEntries.reduce((sum, e) => sum + e.netHours, 0);
-          const hasPlanned = dayEntries.some((e) => e.isPlanned);
+          const hasPlanned = dayEntries.some((e) => isPlannedEntry(e));
           const cellStyle = getHeatmapStyle(dayEntries);
           const isSelected = selectedDayDetails === cell.dateStr;
 
@@ -256,7 +256,7 @@ export const WorkEntriesCalendar: React.FC<WorkEntriesCalendarProps> = ({
                     <span
                       key={e.id || eIdx}
                       className={`w-1.5 h-1.5 rounded-full ${
-                        e.isPlanned ? 'bg-purple-500' : 'bg-emerald-600'
+                        isPlannedEntry(e) ? 'bg-purple-500' : 'bg-emerald-600'
                       }`}
                     />
                   ))}
@@ -327,12 +327,13 @@ export const WorkEntriesCalendar: React.FC<WorkEntriesCalendarProps> = ({
             <div className="space-y-2">
               {selectedEntries.map((entry) => {
                 const { grossEarnings } = calculateEntryEarnings(entry, settings);
+                const isPlanned = isPlannedEntry(entry);
 
                 return (
                   <div
                     key={entry.id}
                     className={`flex items-center justify-between p-2.5 rounded-lg border transition ${
-                      entry.isPlanned
+                      isPlanned
                         ? 'bg-purple-50/70 border-purple-200 text-purple-950'
                         : 'bg-slate-50 border-slate-200 text-slate-900'
                     }`}
@@ -342,7 +343,7 @@ export const WorkEntriesCalendar: React.FC<WorkEntriesCalendarProps> = ({
                         <span className="text-xs font-extrabold">
                           {entry.startTime} - {entry.endTime} ({entry.netHours.toFixed(2)} h)
                         </span>
-                        {entry.isPlanned && (
+                        {isPlanned && (
                           <span className="text-[9px] bg-purple-200 text-purple-800 font-bold px-1.5 py-0.2 rounded uppercase">
                             Planned Shift
                           </span>

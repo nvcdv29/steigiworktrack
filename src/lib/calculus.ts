@@ -50,6 +50,41 @@ export function calculateHours(
 }
 
 /**
+ * Automatically determines whether a work entry is a future/scheduled shift or a past/already-worked shift.
+ * A shift is planned if:
+ * - Its date is in the future relative to `nowDate` (local YYYY-MM-DD), OR
+ * - Its date is today, but the shift start/end time is not in the past yet (shift still ongoing or upcoming)
+ */
+export function isPlannedEntry(
+  entry: Partial<WorkEntry> & { date: string },
+  nowDate: Date = new Date()
+): boolean {
+  if (!entry || !entry.date) return false;
+
+  const year = nowDate.getFullYear();
+  const month = String(nowDate.getMonth() + 1).padStart(2, '0');
+  const day = String(nowDate.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
+
+  if (entry.date > todayStr) {
+    return true;
+  }
+  if (entry.date < todayStr) {
+    return false;
+  }
+
+  // Same day: check current time vs shift end time or start time
+  const currentHours = String(nowDate.getHours()).padStart(2, '0');
+  const currentMins = String(nowDate.getMinutes()).padStart(2, '0');
+  const currentTimeStr = `${currentHours}:${currentMins}`;
+
+  const compareTime = entry.endTime || entry.startTime;
+  if (!compareTime) return false;
+
+  return currentTimeStr < compareTime;
+}
+
+/**
  * Calculates earnings for a given work entry and user settings.
  */
 export function calculateEntryEarnings(
@@ -61,52 +96,23 @@ export function calculateEntryEarnings(
   netEarnings: number;
 } {
   const grossEarnings = Math.round(entry.netHours * settings.hourlyWage * 100) / 100;
-  let fixedCostDeduction = 0;
-
-  const entryMonth = entry.date.substring(0, 7);
-  for (const fc of settings.fixedCosts || []) {
-    if (fc.type === 'per_entry') {
-      if (!fc.appliesToMonth || fc.appliesToMonth === 'ALL' || fc.appliesToMonth === entryMonth) {
-        fixedCostDeduction += fc.amount;
-      }
-    }
-  }
-
-  const netEarnings = Math.round(Math.max(0, grossEarnings - fixedCostDeduction) * 100) / 100;
-
+  // For minijob, gross equals net (no fixed cost deductions)
   return {
     grossEarnings,
-    fixedCostDeduction,
-    netEarnings,
+    fixedCostDeduction: 0,
+    netEarnings: grossEarnings,
   };
 }
 
 /**
- * Calculates total fixed cost deduction for a specific month.
+ * Calculates total fixed cost deduction for a specific month (deprecated - returns 0).
  */
 export function calculateMonthFixedCosts(
-  monthKey: string,
-  entryCount: number,
-  fixedCosts: FixedCostDeduction[] = []
+  _monthKey: string,
+  _entryCount: number,
+  _fixedCosts?: FixedCostDeduction[]
 ): number {
-  let totalDeduction = 0;
-
-  for (const fc of fixedCosts) {
-    // If targeted to a specific month, skip if not matching
-    if (fc.appliesToMonth && fc.appliesToMonth !== 'ALL' && fc.appliesToMonth !== monthKey) {
-      continue;
-    }
-
-    if (fc.type === 'one_time' || fc.type === 'monthly') {
-      totalDeduction += fc.amount;
-    } else if (fc.type === 'weekly') {
-      totalDeduction += fc.amount * 4.33;
-    } else if (fc.type === 'per_entry') {
-      totalDeduction += fc.amount * entryCount;
-    }
-  }
-
-  return Math.round(totalDeduction * 100) / 100;
+  return 0;
 }
 
 /**
@@ -272,15 +278,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   hourlyWage: 16.0,
   currency: '€',
   minijobCap: 538.0,
-  fixedCosts: [
-    {
-      id: 'default-fc-1',
-      title: 'Monthly Workspace & Software Pass',
-      amount: 40.0,
-      type: 'monthly',
-      appliesToMonth: 'ALL',
-    },
-  ],
+  fixedCosts: [],
 };
 
 /**

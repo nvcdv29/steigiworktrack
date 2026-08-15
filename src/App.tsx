@@ -9,8 +9,9 @@ import {
   deleteEntry,
   importEntries,
   subscribeToChanges,
+  formatSupabaseError,
 } from './lib/supabase';
-import { calculateMonthlySummaries, DEFAULT_USER_SETTINGS } from './lib/calculus';
+import { calculateMonthlySummaries, DEFAULT_USER_SETTINGS, isPlannedEntry } from './lib/calculus';
 
 import { Clock, DollarSign, Briefcase, AlertTriangle, RefreshCw } from 'lucide-react';
 import { FormattedNumber } from './components/FormattedNumber';
@@ -24,9 +25,46 @@ import { WorkEntryModal } from './components/WorkEntryModal';
 import { SettingsModal } from './components/SettingsModal';
 import { CalculusGuideModal } from './components/CalculusGuideModal';
 
+const LOCAL_STORAGE_ENTRIES_KEY = 'minijob_tracker_work_entries';
+const LOCAL_STORAGE_SETTINGS_KEY = 'minijob_tracker_user_settings';
+
+function getLocalEntries(): WorkEntry[] {
+  try {
+    const saved = localStorage.getItem(LOCAL_STORAGE_ENTRIES_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalEntries(entries: WorkEntry[]): void {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_ENTRIES_KEY, JSON.stringify(entries));
+  } catch (err) {
+    console.error('Failed to save entries to localStorage:', err);
+  }
+}
+
+function getLocalSettings(): UserSettings {
+  try {
+    const saved = localStorage.getItem(LOCAL_STORAGE_SETTINGS_KEY);
+    return saved ? JSON.parse(saved) : DEFAULT_USER_SETTINGS;
+  } catch {
+    return DEFAULT_USER_SETTINGS;
+  }
+}
+
+function saveLocalSettings(settings: UserSettings): void {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+  } catch (err) {
+    console.error('Failed to save settings to localStorage:', err);
+  }
+}
+
 export default function App() {
-  const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
-  const [entries, setEntries] = useState<WorkEntry[]>([]);
+  const [settings, setSettings] = useState<UserSettings>(getLocalSettings);
+  const [entries, setEntries] = useState<WorkEntry[]>(getLocalEntries);
   const [isLoading, setIsLoading] = useState(true);
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -47,7 +85,7 @@ export default function App() {
         setSupabaseError(null);
 
         if (!isSupabaseConfigured()) {
-          setSupabaseError('Supabase is not configured yet. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables are defined.');
+          setSupabaseError('Supabase is not configured yet. Operating in local storage mode.');
           setIsLoading(false);
           return;
         }
@@ -58,16 +96,25 @@ export default function App() {
         ]);
 
         setSettings(fetchedSettings);
+        saveLocalSettings(fetchedSettings);
+
         setEntries(fetchedEntries);
+        saveLocalEntries(fetchedEntries);
 
         // Enable real-time cross-device / cross-tab synchronization
         try {
           unsubscribe = subscribeToChanges(
             () => {
-              loadEntries().then(setEntries).catch((err) => console.error('Realtime entries refresh error:', err));
+              loadEntries().then((updated) => {
+                setEntries(updated);
+                saveLocalEntries(updated);
+              }).catch((err) => console.error('Realtime entries refresh error:', err));
             },
             () => {
-              loadSettings().then(setSettings).catch((err) => console.error('Realtime settings refresh error:', err));
+              loadSettings().then((updated) => {
+                setSettings(updated);
+                saveLocalSettings(updated);
+              }).catch((err) => console.error('Realtime settings refresh error:', err));
             }
           );
         } catch (rtErr) {
@@ -75,8 +122,8 @@ export default function App() {
         }
       } catch (err: any) {
         console.error('Failed to load data from Supabase:', err);
-        const errorMessage = err?.message || String(err);
-        setSupabaseError(`Failed to sync with Supabase: ${errorMessage}`);
+        const errorMessage = formatSupabaseError(err);
+        setSupabaseError(`Offline / Local Mode Active: ${errorMessage}`);
       } finally {
         setIsLoading(false);
       }
@@ -94,24 +141,35 @@ export default function App() {
   // Recalculate monthly summaries and advance calculus
   const monthlySummaries: MonthSummary[] = calculateMonthlySummaries(entries, settings);
 
-  // Computed metrics for Top Tier
-  const totalNetHours = monthlySummaries.reduce((sum, m) => sum + m.totalNetHours, 0);
-  const totalGrossEarnings = monthlySummaries.reduce((sum, m) => sum + m.grossEarnings, 0);
-  const totalFixedCosts = monthlySummaries.reduce((sum, m) => sum + m.fixedCostDeducted, 0);
-  const totalNetEarnings = monthlySummaries.reduce((sum, m) => sum + m.netEarnings, 0);
+  // Computed metrics for Top Tier (2 Tiles: Already Earned vs Predicted Total)
+  const pastWorkedEntries = entries.filter((e) => !isPlannedEntry(e));
+  const futurePlannedEntries = entries.filter((e) => isPlannedEntry(e));
+
+  const alreadyEarnedIncome = pastWorkedEntries.reduce(
+    (sum, e) => sum + e.netHours * settings.hourlyWage,
+    0
+  );
+  const alreadyWorkedHours = pastWorkedEntries.reduce((sum, e) => sum + e.netHours, 0);
+
+  const futurePlannedEarnings = futurePlannedEntries.reduce(
+    (sum, e) => sum + e.netHours * settings.hourlyWage,
+    0
+  );
+  const totalPredictedEarnings = alreadyEarnedIncome + futurePlannedEarnings;
+  const totalHoursAll = entries.reduce((sum, e) => sum + e.netHours, 0);
 
   // Handlers
   const handleSaveSettings = async (newSettings: UserSettings) => {
-    const previousSettings = settings;
     setSettings(newSettings);
+    saveLocalSettings(newSettings);
     try {
       if (isSupabaseConfigured()) {
         await saveSettings(newSettings);
+        setActionError(null);
       }
     } catch (err: any) {
-      setSettings(previousSettings);
-      const errMsg = err?.message || String(err);
-      setActionError(`Failed to save settings to Supabase: ${errMsg}`);
+      const errMsg = formatSupabaseError(err);
+      setActionError(`Settings saved locally in your browser. Could not sync with Supabase: ${errMsg}`);
     }
   };
 
@@ -124,50 +182,50 @@ export default function App() {
       updated = [entryToSave, ...entries];
     }
     
-    const previousEntries = entries;
     setEntries(updated);
+    saveLocalEntries(updated);
     setIsAddModalOpen(false);
     setEditingEntry(null);
 
     try {
       if (isSupabaseConfigured()) {
         await saveEntry(entryToSave);
+        setActionError(null);
       }
     } catch (err: any) {
-      setEntries(previousEntries);
-      const errMsg = err?.message || String(err);
-      setActionError(`Failed to save work entry to Supabase: ${errMsg}`);
+      const errMsg = formatSupabaseError(err);
+      setActionError(`Entry saved locally in your browser. Could not sync with Supabase: ${errMsg}`);
     }
   };
 
   const handleDeleteEntry = async (id: string) => {
-    const previousEntries = entries;
     const updated = entries.filter((e) => e.id !== id);
     setEntries(updated);
+    saveLocalEntries(updated);
 
     try {
       if (isSupabaseConfigured()) {
         await deleteEntry(id);
+        setActionError(null);
       }
     } catch (err: any) {
-      setEntries(previousEntries);
-      const errMsg = err?.message || String(err);
-      setActionError(`Failed to delete work entry from Supabase: ${errMsg}`);
+      const errMsg = formatSupabaseError(err);
+      setActionError(`Entry removed locally in your browser. Could not sync with Supabase: ${errMsg}`);
     }
   };
 
   const handleImportEntries = async (importedList: WorkEntry[]) => {
-    const previousEntries = entries;
     setEntries(importedList);
+    saveLocalEntries(importedList);
 
     try {
       if (isSupabaseConfigured()) {
         await importEntries(importedList);
+        setActionError(null);
       }
     } catch (err: any) {
-      setEntries(previousEntries);
-      const errMsg = err?.message || String(err);
-      setActionError(`Failed to import entries into Supabase: ${errMsg}`);
+      const errMsg = formatSupabaseError(err);
+      setActionError(`Entries imported locally in your browser. Could not sync with Supabase: ${errMsg}`);
     }
   };
 
@@ -249,46 +307,58 @@ export default function App() {
           </div>
         )}
 
-        {/* Top Tier: KPI Overview (3 Tiles) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Tile 1: Total Worked Hours */}
+        {/* Top Tier: KPI Overview (2 Tiles: Already Earned vs Predicted Total) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {/* Tile 1: Already Earned Income */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between text-sm text-slate-500 font-medium mb-2">
-              <span>Total Worked Hours</span>
-              <Clock className="h-4 w-4 text-indigo-600" />
+            <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              <div className="flex items-center space-x-1.5">
+                <DollarSign className="h-4 w-4 text-emerald-600" />
+                <span>Already Earned Income</span>
+              </div>
+              <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold px-2 py-0.5 rounded-full">
+                Past Worked Shifts
+              </span>
             </div>
-            <p className="text-3xl font-extrabold text-slate-900 tracking-tight">
-              <FormattedNumber value={totalNetHours} suffix="hrs" decimals={1} />
-            </p>
-          </div>
-
-          {/* Tile 2: Total Gross Income */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between text-sm text-slate-500 font-medium mb-2">
-              <span>Total Gross Income</span>
-              <DollarSign className="h-4 w-4 text-emerald-600" />
-            </div>
-            <p className="text-3xl font-extrabold text-slate-900 tracking-tight">
-              <FormattedNumber value={totalGrossEarnings} suffix={` ${settings.currency}`} />
-            </p>
-          </div>
-
-          {/* Tile 3: Net Earnings */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between text-sm text-slate-500 font-medium mb-2">
-              <span>Detected Net Earnings</span>
-              <Briefcase className="h-4 w-4 text-indigo-600" />
-            </div>
-            <div className="flex flex-col">
-              <p className="text-3xl font-extrabold text-indigo-700 tracking-tight">
-                <FormattedNumber value={totalNetEarnings} suffix={` ${settings.currency}`} />
+            <div>
+              <p className="text-3xl font-black text-emerald-700 tracking-tight">
+                <FormattedNumber value={alreadyEarnedIncome} suffix={` ${settings.currency}`} />
               </p>
-              {totalFixedCosts > 0 && (
-                <div className="mt-1 text-xs font-medium text-rose-500 flex items-center space-x-1">
-                  <FormattedNumber value={-totalFixedCosts} suffix={` ${settings.currency}`} />
-                  <span>fixed costs</span>
-                </div>
-              )}
+              <p className="text-xs text-slate-500 font-semibold mt-1 flex items-center space-x-1">
+                <Clock className="h-3.5 w-3.5 text-slate-400 inline shrink-0" />
+                <span>
+                  <FormattedNumber value={alreadyWorkedHours} decimals={1} /> hrs worked ({pastWorkedEntries.length} shifts)
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {/* Tile 2: Predicted Earnings */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              <div className="flex items-center space-x-1.5">
+                <Briefcase className="h-4 w-4 text-indigo-600" />
+                <span>Predicted Earnings</span>
+              </div>
+              <span className="text-[10px] bg-purple-50 text-purple-800 border border-purple-200 font-extrabold px-2 py-0.5 rounded-full">
+                Includes Future Shifts
+              </span>
+            </div>
+            <div>
+              <p className="text-3xl font-black text-indigo-700 tracking-tight">
+                <FormattedNumber value={totalPredictedEarnings} suffix={` ${settings.currency}`} />
+              </p>
+              <p className="text-xs text-indigo-600 font-semibold mt-1 flex items-center space-x-1">
+                <Clock className="h-3.5 w-3.5 text-indigo-400 inline shrink-0" />
+                <span>
+                  <FormattedNumber value={totalHoursAll} decimals={1} /> total hrs
+                  {futurePlannedEarnings > 0 && (
+                    <span className="text-purple-700 font-bold ml-1">
+                      (+{futurePlannedEarnings.toFixed(2)} {settings.currency} planned)
+                    </span>
+                  )}
+                </span>
+              </p>
             </div>
           </div>
         </div>

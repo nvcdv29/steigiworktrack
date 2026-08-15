@@ -14,7 +14,7 @@ import {
   Grid,
 } from 'lucide-react';
 import { WorkEntry, UserSettings } from '../types';
-import { calculateEntryEarnings, formatGermanDate } from '../lib/calculus';
+import { calculateEntryEarnings, formatGermanDate, isPlannedEntry } from '../lib/calculus';
 import { WorkEntriesCalendar } from './WorkEntriesCalendar';
 
 interface WorkEntriesTableProps {
@@ -43,8 +43,8 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Counts for tabs
-  const actualCount = entries.filter((e) => !e.isPlanned).length;
-  const plannedCount = entries.filter((e) => e.isPlanned).length;
+  const actualCount = entries.filter((e) => !isPlannedEntry(e)).length;
+  const plannedCount = entries.filter((e) => isPlannedEntry(e)).length;
 
   // Extract unique months for filter dropdown
   const uniqueMonths = Array.from(
@@ -61,8 +61,8 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
       entry.date.includes(searchQuery);
     const matchesType =
       typeTab === 'ALL' ||
-      (typeTab === 'PLANNED' && entry.isPlanned) ||
-      (typeTab === 'ACTUAL' && !entry.isPlanned);
+      (typeTab === 'PLANNED' && isPlannedEntry(entry)) ||
+      (typeTab === 'ACTUAL' && !isPlannedEntry(entry));
     return matchesMonth && matchesSearch && matchesType;
   });
 
@@ -343,7 +343,7 @@ export const WorkEntriesTable: React.FC<WorkEntriesTableProps> = ({
             ) : (
               sortedEntries.map((entry) => {
                 const { grossEarnings } = calculateEntryEarnings(entry, settings);
-                const isPlanned = entry.isPlanned;
+                const isPlanned = isPlannedEntry(entry);
                 return (
                   <tr
                     key={entry.id}

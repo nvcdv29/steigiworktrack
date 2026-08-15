@@ -46,9 +46,37 @@ export const supabase = (function () {
   }
 })();
 
-function formatSupabaseError(error: any): string {
+export function isNetworkError(err: any): boolean {
+  if (!err) return false;
+  const msg = (err.message || String(err)).toLowerCase();
+  const name = (err.name || '').toLowerCase();
+  const details = typeof err.details === 'string' ? err.details.toLowerCase() : '';
+  return (
+    msg.includes('fetch') ||
+    msg.includes('network') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('load failed') ||
+    msg.includes('cors') ||
+    name.includes('fetch') ||
+    name === 'typeerror' ||
+    details.includes('fetch')
+  );
+}
+
+export function formatSupabaseError(error: any): string {
   if (!error) return 'Unknown error';
-  return `[Code: ${error.code || 'None'}] ${error.message || ''}. Details: ${error.details || 'None'}. Hint: ${error.hint || 'None'}`;
+  if (isNetworkError(error)) {
+    return `Connection failed (${error.message || 'TypeError: Failed to fetch'}). Please check your internet connection, verify your Supabase service status, or check CORS settings in your Supabase project dashboard.`;
+  }
+  const code = error.code ? `[Code: ${error.code}] ` : '';
+  const msg = error.message ? error.message : String(error);
+  const detailsStr =
+    error.details && typeof error.details === 'string' && !error.details.includes('at ')
+      ? `. Details: ${error.details}`
+      : '';
+  const hintStr = error.hint ? `. Hint: ${error.hint}` : '';
+
+  return `${code}${msg}${detailsStr}${hintStr}`;
 }
 
 /**
@@ -153,11 +181,17 @@ export async function saveSettings(settings: UserSettings): Promise<void> {
   let lastError: any = null;
 
   for (const payload of candidates) {
-    const { error } = await supabase.from('user_settings').upsert(payload as any);
-    if (!error) return;
-    lastError = error;
-    if (error.code === '42P01') {
-      throw new Error('The "user_settings" table does not exist in your Supabase database.');
+    try {
+      const { error } = await supabase.from('user_settings').upsert(payload as any);
+      if (!error) return;
+      lastError = error;
+      if (error.code === '42P01') {
+        throw new Error('The "user_settings" table does not exist in your Supabase database.');
+      }
+      if (isNetworkError(error)) break;
+    } catch (err: any) {
+      lastError = err;
+      if (isNetworkError(err)) break;
     }
   }
 
@@ -314,11 +348,17 @@ export async function saveEntry(entry: WorkEntry): Promise<void> {
   let lastError: any = null;
 
   for (const payload of candidates) {
-    const { error } = await supabase.from('work_entries').upsert(payload as any);
-    if (!error) return;
-    lastError = error;
-    if (error.code === '42P01') {
-      throw new Error('The "work_entries" table does not exist in your Supabase database.');
+    try {
+      const { error } = await supabase.from('work_entries').upsert(payload as any);
+      if (!error) return;
+      lastError = error;
+      if (error.code === '42P01') {
+        throw new Error('The "work_entries" table does not exist in your Supabase database.');
+      }
+      if (isNetworkError(error)) break;
+    } catch (err: any) {
+      lastError = err;
+      if (isNetworkError(err)) break;
     }
   }
 
@@ -489,12 +529,18 @@ export async function importEntries(entries: WorkEntry[]): Promise<void> {
   let lastError: any = null;
 
   for (const gen of candidatePayloadGenerators) {
-    const payload = gen(entries);
-    const { error } = await supabase.from('work_entries').upsert(payload as any);
-    if (!error) return;
-    lastError = error;
-    if (error.code === '42P01') {
-      throw new Error('The "work_entries" table does not exist in your Supabase database. Please run the SQL setup script to create it.');
+    try {
+      const payload = gen(entries);
+      const { error } = await supabase.from('work_entries').upsert(payload as any);
+      if (!error) return;
+      lastError = error;
+      if (error.code === '42P01') {
+        throw new Error('The "work_entries" table does not exist in your Supabase database. Please run the SQL setup script to create it.');
+      }
+      if (isNetworkError(error)) break;
+    } catch (err: any) {
+      lastError = err;
+      if (isNetworkError(err)) break;
     }
   }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Calendar, Clock, Plus, Sparkles, CheckSquare, Square, Trash2, ArrowRight, Zap } from 'lucide-react';
 import { WorkEntry, UserSettings, MonthSummary, TargetScenario, PlannerState } from '../types';
-import { calculateActiveWorkdays, calculateEntryEarnings, formatGermanDate } from '../lib/calculus';
+import { calculateActiveWorkdays, calculateEntryEarnings, formatGermanDate, isPlannedEntry } from '../lib/calculus';
 import { FormattedNumber } from './FormattedNumber';
 
 interface TargetBufferPlannerProps {
@@ -98,10 +98,10 @@ export const TargetBufferPlanner: React.FC<TargetBufferPlannerProps> = ({
   const latestSummary = monthlySummaries.length > 0 ? monthlySummaries[monthlySummaries.length - 1] : null;
   const actualBankReserve = latestSummary
     ? Math.max(0, latestSummary.rolloverUnpaidEnd)
-    : entries.filter((e) => !e.isPlanned).reduce((sum, e) => sum + e.netHours * settings.hourlyWage, 0);
+    : entries.filter((e) => !isPlannedEntry(e)).reduce((sum, e) => sum + e.netHours * settings.hourlyWage, 0);
 
   // 3. Commitments: Scheduled Future Shifts (Pre-built Credit)
-  const plannedEntries = entries.filter((e) => e.isPlanned);
+  const plannedEntries = entries.filter((e) => isPlannedEntry(e));
   const enabledPlannedEntries = plannedEntries.filter((e) => !disabledShiftIds.includes(e.id));
 
   const scheduledShiftCredit = enabledPlannedEntries.reduce((sum, e) => {

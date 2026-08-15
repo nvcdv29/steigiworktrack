@@ -77,7 +77,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               }`}
             >
               <DollarSign className="h-3.5 w-3.5" />
-              <span>Earnings &amp; Costs</span>
+              <span>Earnings Trend</span>
             </button>
             <button
               onClick={() => setActiveTab('hours')}
@@ -136,17 +136,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                       stroke="#4f46e5" 
                       fillOpacity={1} 
                       fill="url(#colorGross)" 
-                      name="Gross Earnings" 
+                      name="Earned Income" 
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="Net" 
-                      stroke="#10b981" 
-                      fillOpacity={1} 
-                      fill="url(#colorNet)" 
-                      name="Net Earnings" 
-                    />
-                    <Bar dataKey="FixedCost" fill="#f43f5e" radius={[4, 4, 0, 0]} name="Fixed Costs" barSize={20} />
                     <Line
                       type="stepAfter"
                       dataKey="Cap"

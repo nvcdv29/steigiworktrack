@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { X, Calculator, Info, Sparkles } from 'lucide-react';
+import { X, Calculator, Sparkles } from 'lucide-react';
 import { UserSettings } from '../types';
 
 interface CalculusGuideModalProps {
@@ -14,7 +14,6 @@ export const CalculusGuideModal: React.FC<CalculusGuideModalProps> = ({
   const wage = settings.hourlyWage || 16.0;
   const cap = settings.minijobCap || 538.0;
   const limitHours = wage > 0 ? cap / wage : 0;
-  const fixedCostCount = (settings.fixedCosts || []).length;
 
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -117,14 +116,6 @@ export const CalculusGuideModal: React.FC<CalculusGuideModalProps> = ({
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Fixed Cost Interaction Note */}
-          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-start space-x-2 text-slate-600 text-[11px]">
-            <Info className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-            <p>
-              <strong className="text-slate-800">Fixed Cost Deductions:</strong> You have <strong>{fixedCostCount}</strong> configured fixed cost deduction rule(s) (recurring monthly/weekly, per entry, or one-time for a specific month like August). These are deducted from gross income to provide your true <strong>Net Profit</strong>.
-            </p>
           </div>
         </div>
 

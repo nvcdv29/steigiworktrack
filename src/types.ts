@@ -49,14 +49,14 @@ export interface FixedCostDeduction {
   title: string;
   amount: number;
   type: FixedCostType;
-  appliesToMonth?: string; // YYYY-MM (e.g. "2026-08") or empty/"ALL" for recurring
+  appliesToMonth?: string;
 }
 
 export interface UserSettings {
   hourlyWage: number; // e.g. 16.00
   currency: string; // Fixed to '€'
   minijobCap: number; // e.g. 538.00 per month
-  fixedCosts: FixedCostDeduction[];
+  fixedCosts?: FixedCostDeduction[]; // Deprecated/optional
   deferredMonths?: string[]; // Array of YYYY-MM strings indicating months where payout is deferred entirely
 }
 
@@ -72,7 +72,7 @@ export interface MonthSummary {
   entryCount: number;
   totalNetHours: number;
   grossEarnings: number;
-  fixedCostDeducted: number;
+  fixedCostDeducted?: number; // Kept as optional 0 for compatibility
   netEarnings: number;
   minijobCap: number;
   monthlyHourLimit: number;
